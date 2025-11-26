@@ -1,18 +1,32 @@
 use std::env;
 
+mod cli;
 mod pe;
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let mut arg_parser = cli::CLIParser::new();
+    arg_parser.add_argument(
+        "file",
+        Some("f"),
+        cli::CLIArgType::String,
+        cli::CLIArgAction::Store,
+    );
+    arg_parser.add_argument(
+        "search-paths",
+        None,
+        cli::CLIArgType::String,
+        cli::CLIArgAction::Store,
+    );
 
-    if args.len() < 2 {
-        println!("Usage: fdw <file_path>");
-        return;
-    }
+    let parse_res = arg_parser
+        .parse()
+        .expect("Error caught while parsing arguments");
 
-    let file_path = &args[1];
+    let file_path = arg_parser
+        .get_argument_as_string("file")
+        .expect("Argument file has not been passed");
 
-    let pe = pe::parse_pe(file_path).unwrap_or_else(|err| {
+    let pe = pe::parse_pe(file_path.as_str()).unwrap_or_else(|err| {
         panic!("Error caught while trying to inspect file: {file_path} ({err})")
     });
 
