@@ -355,13 +355,62 @@ pub struct SectionHeader {
     pointer_to_relocations: u32,
     pointer_to_line_numbers: u32,
     number_of_relocations: u16,
-    numer_of_line_numbers: u16,
+    number_of_line_numbers: u16,
     characteristics: u32,
 }
 
 impl SectionHeader {
     fn new() -> SectionHeader {
         return SectionHeader::default();
+    }
+
+    fn from_parser(
+        cursor: &mut io::Cursor<Vec<u8>>,
+    ) -> Result<SectionHeader, Box<dyn std::error::Error>> {
+        let mut header = SectionHeader::new();
+
+        let first_name_byte = cursor.read_u8()?;
+
+        if first_name_byte == 0x2F as u8 {
+            // "/"
+            todo!("Need to implement section header name finding in string table");
+        } else if first_name_byte == 0x0 as u8 {
+            // "\0"
+            header.name = "empty".to_string();
+            cursor.set_position(cursor.position() + 39);
+
+            return Ok(header);
+        } else {
+            let mut name_buffer: Vec<u8> = Vec::new();
+
+            name_buffer.push(first_name_byte);
+
+            for _ in 0..7 {
+                let c = cursor.read_u8()?;
+
+                if c == '\0' as u8 {
+                    continue;
+                }
+
+                name_buffer.push(c);
+            }
+
+            println!("name: {:?}", name_buffer);
+
+            header.name = String::from_utf8(name_buffer).expect("Invalid section name found in PE");
+        }
+
+        header.virtual_size = cursor.read_u32::<LittleEndian>()?;
+        header.virtual_address = cursor.read_u32::<LittleEndian>()?;
+        header.size_of_raw_data = cursor.read_u32::<LittleEndian>()?;
+        header.ptr_to_raw_data = cursor.read_u32::<LittleEndian>()?;
+        header.pointer_to_relocations = cursor.read_u32::<LittleEndian>()?;
+        header.pointer_to_line_numbers = cursor.read_u32::<LittleEndian>()?;
+        header.number_of_relocations = cursor.read_u16::<LittleEndian>()?;
+        header.number_of_line_numbers = cursor.read_u16::<LittleEndian>()?;
+        header.characteristics = cursor.read_u32::<LittleEndian>()?;
+
+        return Ok(header);
     }
 }
 
@@ -407,6 +456,7 @@ pub enum PEArchitecture {
 #[derive(Default, Debug)]
 pub struct PE {
     header: PEHeader,
+    sections_headers: Vec<SectionHeader>,
 }
 
 impl PE {
@@ -414,10 +464,32 @@ impl PE {
         return PE::default();
     }
 
-    pub fn get_architecture(self) -> PEArchitecture {
-        match self.header {
+    pub fn get_architecture(&self) -> PEArchitecture {
+        match &self.header {
             PEHeader::PE32(_) => return PEArchitecture::PE32,
             PEHeader::PE64(_) => return PEArchitecture::PE64,
+        }
+    }
+
+    pub fn get_size_of_optional_header(&self) -> u64 {
+        match &self.header {
+            PEHeader::PE32(header) => {
+                return header.nt.coff_header.size_of_optional_header as u64;
+            }
+            PEHeader::PE64(header) => {
+                return header.nt.coff_header.size_of_optional_header as u64;
+            }
+        }
+    }
+
+    pub fn get_number_of_sections(&self) -> usize {
+        match &self.header {
+            PEHeader::PE32(header) => {
+                return header.nt.coff_header.number_of_sections as usize;
+            }
+            PEHeader::PE64(header) => {
+                return header.nt.coff_header.number_of_sections as usize;
+            }
         }
     }
 }
@@ -449,6 +521,8 @@ pub fn parse_pe(file_path: &str) -> Result<PE, Box<dyn std::error::Error>> {
 
     let optional_magic: u16 = cursor.read_u16::<LittleEndian>()?;
 
+    let start_of_optional_position = cursor.position();
+
     match optional_magic {
         PE_FORMAT_32_MAGIC => {
             cursor.set_position(cursor.position() - 2);
@@ -475,7 +549,19 @@ pub fn parse_pe(file_path: &str) -> Result<PE, Box<dyn std::error::Error>> {
         }
     }
 
-    println!("optional: {:?}", pe.header);
+    let end_of_optional_position = cursor.position();
+    let optional_size = end_of_optional_position - start_of_optional_position;
+
+    println!("PE Headers: {:?}", pe.header);
+
+    cursor.set_position(cursor.position() + (pe.get_size_of_optional_header() - optional_size - 2));
+
+    for _ in 0..pe.get_number_of_sections() {
+        pe.sections_headers
+            .push(SectionHeader::from_parser(&mut cursor)?);
+    }
+
+    println!("PE Section Headers: {:?}", pe.sections_headers);
 
     return Ok(pe);
 }
