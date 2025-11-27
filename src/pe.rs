@@ -10,7 +10,7 @@ use std::io::Read;
  */
 
 /*
- * MS-DOS Header present in every executable file
+ * MS-DOS Header present in every PE file
  */
 
 /* Magic number for MS-DOS executable */
