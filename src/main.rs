@@ -1,5 +1,3 @@
-use std::env;
-
 mod cli;
 mod pe;
 
@@ -36,4 +34,6 @@ fn main() {
         pe::PEArchitecture::PE32 => println!("PE type: 32-bit"),
         pe::PEArchitecture::PE64 => println!("PE type: 64-bit"),
     }
+
+    println!("DLLs: {:?}", pe.dll_names);
 }
