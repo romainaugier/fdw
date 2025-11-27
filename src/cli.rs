@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::io::Read;
 
 /*
  * CLI Argument
@@ -35,6 +34,7 @@ impl Default for CLIArgAction {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Default, Clone, Debug)]
 struct CLIArg {
     arg_name: &'static str,
@@ -120,14 +120,14 @@ impl CLIParser {
                 let arg_name = arg_split.0.trim_matches('-');
                 let arg_value = arg_split.1;
 
-                let mut arg = self
+                let arg = self
                     .args
                     .get_mut(arg_name)
                     .expect("Undeclared argument parsed in command-line arguments");
 
                 arg.arg_value = arg_value.to_string();
             } else {
-                let mut arg = self
+                let arg = self
                     .args
                     .get_mut(arg.as_str().trim_matches('-'))
                     .expect("Undeclared argument parsed in command-line arguments");

@@ -1,22 +1,26 @@
-mod cli;
-mod pe;
+pub mod cli;
+pub mod pe;
 
 fn main() {
     let mut arg_parser = cli::CLIParser::new();
-    arg_parser.add_argument(
-        "file",
-        Some("f"),
-        cli::CLIArgType::String,
-        cli::CLIArgAction::Store,
-    );
-    arg_parser.add_argument(
-        "search-paths",
-        None,
-        cli::CLIArgType::String,
-        cli::CLIArgAction::Store,
-    );
+    arg_parser
+        .add_argument(
+            "file",
+            Some("f"),
+            cli::CLIArgType::String,
+            cli::CLIArgAction::Store,
+        )
+        .expect("Error while adding argument to CLIParser");
+    arg_parser
+        .add_argument(
+            "search-paths",
+            None,
+            cli::CLIArgType::String,
+            cli::CLIArgAction::Store,
+        )
+        .expect("Error while adding argument to CLIParser");
 
-    let parse_res = arg_parser
+    arg_parser
         .parse()
         .expect("Error caught while parsing arguments");
 
