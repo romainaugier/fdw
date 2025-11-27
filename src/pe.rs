@@ -802,8 +802,8 @@ pub fn parse_pe(file_path: &str) -> Result<PE, Box<dyn std::error::Error>> {
         return Err("File does not exist".into());
     }
 
-    if !file_path.ends_with(".exe") {
-        return Err("File is not an executable (.exe)".into());
+    if !file_path.ends_with(".exe") && !file_path.ends_with(".dll") {
+        return Err("File is not a Portable Executable (.exe | .dll)".into());
     }
 
     let file_bytes = std::fs::read(file_path).expect("Unable to open file");
