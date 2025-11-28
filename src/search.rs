@@ -1,5 +1,10 @@
 use std::{collections::HashMap, path::PathBuf};
 
+enum SearchResult {
+    Dependencies(HashMap<String, SearchResult>),
+    Path(String),
+}
+
 pub fn search_dlls(
     results: &mut HashMap<String, Option<String>>,
     search_paths: Vec<PathBuf>,

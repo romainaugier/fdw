@@ -2,6 +2,7 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 pub mod cli;
 pub mod pe;
+pub mod apiset;
 pub mod search;
 
 fn main() {

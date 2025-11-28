@@ -28,7 +28,7 @@ impl DOSHeader {
         return DOSHeader::default();
     }
 
-    fn from_parser(cursor: &mut io::Cursor<Vec<u8>>) -> Result<DOSHeader, Box<dyn Error>> {
+    fn from_parser(cursor: &mut io::Cursor<&Vec<u8>>) -> Result<DOSHeader, Box<dyn Error>> {
         let mut header: DOSHeader = DOSHeader::new();
         header.magic = cursor.read_u16::<LittleEndian>()?;
 
@@ -61,7 +61,7 @@ pub struct COFFHeader {
 }
 
 impl COFFHeader {
-    fn from_parser(cursor: &mut io::Cursor<Vec<u8>>) -> Result<COFFHeader, Box<dyn Error>> {
+    fn from_parser(cursor: &mut io::Cursor<&Vec<u8>>) -> Result<COFFHeader, Box<dyn Error>> {
         let mut header: COFFHeader = COFFHeader::default();
 
         header.machine = cursor.read_u16::<LittleEndian>()?;
@@ -86,7 +86,7 @@ pub struct NTHeader {
 }
 
 impl NTHeader {
-    fn from_parser(cursor: &mut io::Cursor<Vec<u8>>) -> Result<NTHeader, Box<dyn Error>> {
+    fn from_parser(cursor: &mut io::Cursor<&Vec<u8>>) -> Result<NTHeader, Box<dyn Error>> {
         let mut header: NTHeader = NTHeader::default();
         header.signature = cursor.read_u32::<LittleEndian>()?;
 
@@ -117,7 +117,7 @@ impl ImageDataDirectory {
     }
 
     pub fn from_parser(
-        cursor: &mut io::Cursor<Vec<u8>>,
+        cursor: &mut io::Cursor<&Vec<u8>>,
     ) -> Result<ImageDataDirectory, Box<dyn std::error::Error>> {
         let mut idd = ImageDataDirectory::new();
 
@@ -199,7 +199,7 @@ impl OptionalHeader32 {
         return OptionalHeader32::default();
     }
 
-    fn from_parser(cursor: &mut io::Cursor<Vec<u8>>) -> Result<OptionalHeader32, Box<dyn Error>> {
+    fn from_parser(cursor: &mut io::Cursor<&Vec<u8>>) -> Result<OptionalHeader32, Box<dyn Error>> {
         let mut header: OptionalHeader32 = OptionalHeader32::new();
 
         header.magic = cursor.read_u16::<LittleEndian>()?;
@@ -313,7 +313,7 @@ impl OptionalHeader64 {
         return OptionalHeader64::default();
     }
 
-    fn from_parser(cursor: &mut io::Cursor<Vec<u8>>) -> Result<OptionalHeader64, Box<dyn Error>> {
+    fn from_parser(cursor: &mut io::Cursor<&Vec<u8>>) -> Result<OptionalHeader64, Box<dyn Error>> {
         let mut header: OptionalHeader64 = OptionalHeader64::new();
 
         header.magic = cursor.read_u16::<LittleEndian>()?;
@@ -373,16 +373,16 @@ impl OptionalHeader64 {
 #[derive(Default, Clone, Debug)]
 #[repr(C)]
 pub struct SectionHeader {
-    name: String,
-    virtual_size: u32,
-    virtual_address: u32,
-    size_of_raw_data: u32,
-    ptr_to_raw_data: u32,
-    pointer_to_relocations: u32,
-    pointer_to_line_numbers: u32,
-    number_of_relocations: u16,
-    number_of_line_numbers: u16,
-    characteristics: u32,
+    pub name: String,
+    pub virtual_size: u32,
+    pub virtual_address: u32,
+    pub size_of_raw_data: u32,
+    pub ptr_to_raw_data: u32,
+    pub pointer_to_relocations: u32,
+    pub pointer_to_line_numbers: u32,
+    pub number_of_relocations: u16,
+    pub number_of_line_numbers: u16,
+    pub characteristics: u32,
 }
 
 impl SectionHeader {
@@ -391,7 +391,7 @@ impl SectionHeader {
     }
 
     fn from_parser(
-        cursor: &mut io::Cursor<Vec<u8>>,
+        cursor: &mut io::Cursor<&Vec<u8>>,
     ) -> Result<SectionHeader, Box<dyn std::error::Error>> {
         let mut header = SectionHeader::new();
 
@@ -456,8 +456,7 @@ impl SectionHeader {
 #[derive(Default, Clone)]
 #[repr(C)]
 pub struct Section {
-    header: SectionHeader,
-    raw_data: Vec<u8>,
+    pub header: SectionHeader,
 }
 
 impl std::fmt::Debug for Section {
@@ -470,11 +469,8 @@ impl std::fmt::Debug for Section {
 }
 
 impl Section {
-    pub fn new(header: SectionHeader, raw_data: Vec<u8>) -> Section {
-        return Section {
-            header: header,
-            raw_data: raw_data,
-        };
+    pub fn new(header: SectionHeader) -> Section {
+        return Section { header: header };
     }
 }
 
@@ -498,7 +494,7 @@ impl ImageImportDescriptor {
     }
 
     pub fn from_parser(
-        cursor: &mut io::Cursor<Vec<u8>>,
+        cursor: &mut io::Cursor<&Vec<u8>>,
     ) -> Result<ImageImportDescriptor, Box<dyn std::error::Error>> {
         let mut descriptor = ImageImportDescriptor::new();
 
@@ -534,7 +530,7 @@ impl ImportLookupEntry {
     }
 
     pub fn from_parser(
-        cursor: &mut io::Cursor<Vec<u8>>,
+        cursor: &mut io::Cursor<&Vec<u8>>,
         is_32_bits: bool,
     ) -> Result<ImportLookupEntry, Box<dyn std::error::Error>> {
         let mut entry = ImportLookupEntry::new();
@@ -577,7 +573,7 @@ impl HintNameEntry {
     }
 
     pub fn from_parser(
-        cursor: &mut io::Cursor<Vec<u8>>,
+        cursor: &mut io::Cursor<&Vec<u8>>,
     ) -> Result<HintNameEntry, Box<dyn std::error::Error>> {
         let mut entry = HintNameEntry::new();
 
@@ -651,10 +647,11 @@ pub enum PEArchitecture {
 
 #[derive(Default, Debug)]
 pub struct PE {
-    header: PEHeader,
-    sections: HashMap<String, Section>,
-    import_descriptors: Vec<ImageImportDescriptor>,
+    pub header: PEHeader,
+    pub sections: HashMap<String, Section>,
+    pub import_descriptors: Vec<ImageImportDescriptor>,
     pub dll_names: Vec<String>,
+    pub data: Vec<u8>,
 }
 
 impl PE {
@@ -729,7 +726,7 @@ impl PE {
  */
 fn parse_import_descriptors(
     pe: &PE,
-    cursor: &mut io::Cursor<Vec<u8>>,
+    cursor: &mut io::Cursor<&Vec<u8>>,
 ) -> Result<Vec<ImageImportDescriptor>, Box<dyn std::error::Error>> {
     let mut descriptors: Vec<ImageImportDescriptor> = Vec::new();
 
@@ -764,7 +761,7 @@ fn parse_import_descriptors(
  */
 fn parse_dll_names(
     pe: &PE,
-    cursor: &mut io::Cursor<Vec<u8>>,
+    cursor: &mut io::Cursor<&Vec<u8>>,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let mut dlls: Vec<String> = Vec::new();
 
@@ -808,14 +805,16 @@ pub fn parse_pe(file_path: &str) -> Result<PE, Box<dyn std::error::Error>> {
 
     let file_bytes = std::fs::read(file_path).expect("Unable to open file");
 
-    let mut cursor = io::Cursor::new(file_bytes);
+    let mut pe: PE = PE::new();
+    pe.data = file_bytes;
+
+    let mut cursor = io::Cursor::new(&pe.data);
 
     let dos_header = DOSHeader::from_parser(&mut cursor)?;
 
     cursor.set_position(dos_header.lfanew as u64);
 
     let nt_header = NTHeader::from_parser(&mut cursor)?;
-    let mut pe: PE = PE::new();
 
     let optional_magic: u16 = cursor.read_u16::<LittleEndian>()?;
     cursor.set_position(cursor.position() - 2);
@@ -853,29 +852,13 @@ pub fn parse_pe(file_path: &str) -> Result<PE, Box<dyn std::error::Error>> {
 
     for _ in 0..pe.get_number_of_sections() {
         let section_header = SectionHeader::from_parser(&mut cursor)?;
-        let cursor_position_after_section_header = cursor.position();
-
-        let mut section_raw_data = vec![0; section_header.size_of_raw_data as usize];
-
-        cursor.set_position(section_header.ptr_to_raw_data as u64);
-
-        let read_bytes = cursor
-            .read(&mut section_raw_data)
-            .expect("Could not read raw data from section");
-
-        if read_bytes as u32 != section_header.size_of_raw_data {
-            return Err("Could not read all raw data from section".into());
-        }
 
         pe.sections.insert(
             section_header.name.clone(),
             Section {
                 header: section_header,
-                raw_data: section_raw_data,
             },
         );
-
-        cursor.set_position(cursor_position_after_section_header);
     }
 
     pe.import_descriptors = parse_import_descriptors(&pe, &mut cursor)?;
