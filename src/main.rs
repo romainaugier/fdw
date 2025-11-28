@@ -1,8 +1,10 @@
 use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
+use crate::apiset::APISetValueEntry;
+
+pub mod apiset;
 pub mod cli;
 pub mod pe;
-pub mod apiset;
 pub mod search;
 
 fn main() {
@@ -28,6 +30,11 @@ fn main() {
         .parse()
         .expect("Error caught while parsing arguments");
 
+    let apiset_schema_mapping =
+        apiset::load_apisetschema_mapping().expect("Could not load apisetschema");
+
+    println!("Loaded apisetschema mapping");
+
     let file_path = arg_parser
         .get_argument_as_string("file")
         .expect("Argument file has not been passed");
@@ -46,7 +53,18 @@ fn main() {
     let mut results: HashMap<String, Option<String>> = HashMap::new();
 
     for dll_name in &pe.dll_names {
-        results.insert(dll_name.to_lowercase(), None);
+        let lower = dll_name.to_ascii_lowercase();
+
+        if lower.starts_with("api-ms-win") || lower.starts_with("ext-ms-win") {
+            let mapped = match apiset_schema_mapping.map(&lower) {
+                Some(name) => name,
+                _ => continue,
+            };
+
+            results.insert(mapped.clone(), None);
+        } else {
+            results.insert(lower, None);
+        }
     }
 
     let mut search_paths: Vec<PathBuf> = Vec::new();

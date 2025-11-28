@@ -722,7 +722,7 @@ impl PE {
 }
 
 /*
- * Parse import descriptors
+ * Parse import descriptors. Returns an empty vector if there are no import descriptors
  */
 fn parse_import_descriptors(
     pe: &PE,
@@ -732,9 +732,12 @@ fn parse_import_descriptors(
 
     let import_table_idd = pe.get_import_table_idd();
 
-    let file_offset = pe
-        .convert_rva_to_file_offset(import_table_idd.virtual_address)
-        .ok_or("Import Table RVA does not map to any section")?;
+    let file_offset = match pe.convert_rva_to_file_offset(import_table_idd.virtual_address) {
+        Some(offset) => offset,
+        _ => {
+            return Ok(descriptors);
+        }
+    };
 
     cursor.set_position(file_offset as u64);
 
