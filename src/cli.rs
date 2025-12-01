@@ -188,4 +188,47 @@ impl CLIParser {
 
         return Ok(arg.arg_value.to_string());
     }
+
+    pub fn get_argument_as_i64_with_default(&self, arg_name: &str, default: i64) -> i64 {
+        match self.args.get(arg_name) {
+            Some(arg) => match arg.arg_value.parse::<i64>() {
+                Ok(x) => return x,
+                Err(_) => return default,
+            },
+            None => {
+                return default;
+            }
+        }
+    }
+
+    pub fn get_argument_as_f64_with_default(&self, arg_name: &str, default: f64) -> f64 {
+        match self.args.get(arg_name) {
+            Some(arg) => match arg.arg_value.parse::<f64>() {
+                Ok(x) => return x,
+                Err(_) => return default,
+            },
+            None => {
+                return default;
+            }
+        }
+    }
+
+    pub fn get_argument_as_bool_with_default(&self, arg_name: &str, default: bool) -> bool {
+        match self.args.get(arg_name) {
+            Some(arg) => {
+                return matches!(
+                    arg.arg_value.to_ascii_lowercase().as_str(),
+                    "1" | "true" | "yes" | "on" | "t" | "y"
+                );
+            }
+            None => return default,
+        };
+    }
+
+    pub fn get_argument_as_string_with_default(&self, arg_name: &str, default: String) -> String {
+        match self.args.get(arg_name) {
+            Some(arg) => return arg.arg_value.clone(),
+            None => return default,
+        }
+    }
 }

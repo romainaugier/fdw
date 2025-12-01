@@ -1,9 +1,8 @@
 use byteorder::{LittleEndian, ReadBytesExt};
 use std::collections::HashMap;
 use std::error::Error;
-use std::fs;
 use std::io;
-use std::io::Read;
+use std::path::PathBuf;
 
 /*
  * https://learn.microsoft.com/en-us/windows/win32/debug/pe-format
@@ -795,14 +794,14 @@ fn parse_dll_names(
 /*
  * Main parse method that reads from a file, tests if it's a PE file or not, and returns the parsed PE
  */
-pub fn parse_pe(file_path: &str) -> Result<PE, Box<dyn std::error::Error>> {
-    let exists = fs::exists(file_path)?;
-
-    if !exists {
+pub fn parse_pe(file_path: &PathBuf) -> Result<PE, Box<dyn std::error::Error>> {
+    if !file_path.exists() {
         return Err("File does not exist".into());
     }
 
-    if !file_path.ends_with(".exe") && !file_path.ends_with(".dll") {
+    let file_path_str: &str = file_path.to_str().expect("Cannot convert file_path to str");
+
+    if !file_path_str.ends_with(".exe") && !file_path_str.ends_with(".dll") {
         return Err("File is not a Portable Executable (.exe | .dll)".into());
     }
 

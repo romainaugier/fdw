@@ -2,9 +2,10 @@ use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
 use std::collections::HashMap;
 use std::io::Read;
-use std::io::Seek;
+use std::path::PathBuf;
+use std::str::FromStr;
 
-const APISetSchemaDLLPath: &str = "C:\\Windows\\System32\\apisetschema.dll";
+const API_SET_SCHEMA_DLL_PATH: &str = "C:/Windows/System32/apisetschema.dll";
 
 #[derive(Default, Clone, Debug)]
 #[repr(C)]
@@ -113,6 +114,12 @@ impl APISet {
     }
 
     pub fn map(&self, dll_name: &String) -> Option<&String> {
+        if dll_name.ends_with(".dll") {
+            return self
+                .mapping
+                .get(dll_name.split_at_checked(dll_name.len() - 4).unwrap().0);
+        }
+
         return self.mapping.get(dll_name);
     }
 }
@@ -181,7 +188,12 @@ fn parse_apiset(apiset_dll: super::pe::PE) -> Result<APISet, Box<dyn std::error:
 }
 
 pub fn load_apisetschema_mapping() -> Result<APISet, Box<dyn std::error::Error>> {
-    let pe = super::pe::parse_pe(APISetSchemaDLLPath)?;
+    let p = PathBuf::from_str(API_SET_SCHEMA_DLL_PATH)?;
+    let pe = super::pe::parse_pe(&p)?;
 
     return parse_apiset(pe);
+}
+
+pub fn is_dll_from_apiset_schema(name: &str) -> bool {
+    return name.starts_with("api-ms-win") || name.starts_with("ext-ms-win");
 }
