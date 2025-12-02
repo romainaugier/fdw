@@ -6,19 +6,7 @@ pub mod cli;
 pub mod pe;
 pub mod search;
 
-fn i64_to_level_filter(value: i64) -> log::LevelFilter {
-    match value {
-        0 => return log::LevelFilter::Off,
-        1 => return log::LevelFilter::Error,
-        2 => return log::LevelFilter::Warn,
-        3 => return log::LevelFilter::Info,
-        4 => return log::LevelFilter::Debug,
-        5 => return log::LevelFilter::Trace,
-        _ => return log::LevelFilter::Error,
-    }
-}
-
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut arg_parser = cli::CLIParser::new();
 
     arg_parser
@@ -58,19 +46,27 @@ fn main() {
         .parse()
         .expect("Error caught while parsing arguments");
 
-    match arg_parser.get_argument_as_i64("loglevel") {
-        Ok(level) => log::set_max_level(i64_to_level_filter(level)),
-        _ => log::set_max_level(log::LevelFilter::Error),
+    let log_level = match arg_parser.get_argument_as_i64_with_default("loglevel", 1) {
+        0 => log::LevelFilter::Off,
+        1 => log::LevelFilter::Error,
+        2 => log::LevelFilter::Warn,
+        3 => log::LevelFilter::Info,
+        4 => log::LevelFilter::Debug,
+        5 => log::LevelFilter::Trace,
+        _ => log::LevelFilter::Error,
     };
 
-    let apiset_schema_mapping =
-        apiset::load_apisetschema_mapping().expect("Could not load apisetschema");
+    env_logger::builder().filter_level(log_level).init();
 
-    log::debug!("Loaded apisetschema mapping");
+    log::trace!("Starting fdw");
+
+    let apiset_schema_mapping = apiset::load_apisetschema_mapping()?;
 
     let file_path = arg_parser
         .get_argument_as_string("file")
         .expect("Argument file has not been passed");
+
+    log::trace!("Initializing search paths");
 
     let mut search_paths: Vec<PathBuf> = Vec::new();
 
@@ -81,6 +77,8 @@ fn main() {
             .expect("Cannot find parent of --file")
             .to_path_buf(),
     );
+
+    log::trace!("pe directory added to search paths: {:?}", search_paths);
 
     for path in std::env::split_paths(
         std::env::var("PATH")
@@ -97,6 +95,8 @@ fn main() {
 
         search_paths.push(path);
     }
+
+    log::trace!("PATH paths added to search paths: {:?}", search_paths);
 
     let user_search_paths = arg_parser.get_argument_as_string("search-paths").unwrap();
 
@@ -115,6 +115,11 @@ fn main() {
 
             search_paths.push(path_buf);
         }
+
+        log::trace!(
+            "User provided paths added to search paths: {:?}",
+            search_paths
+        );
     }
 
     match search::resolve_dependencies(
@@ -124,8 +129,8 @@ fn main() {
         arg_parser.get_argument_as_bool_with_default("recurse", false),
     ) {
         Ok(dependencies) => println!("{:#}", dependencies),
-        Err(err) => log::error!(
-            "Error caught while trying to find dependencies for pe \"{file_path}\" ({err})"
-        ),
+        Err(err) => return Err(err),
     };
+
+    return Ok(());
 }

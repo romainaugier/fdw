@@ -126,6 +126,8 @@ impl APISet {
 }
 
 fn parse_apiset(apiset_dll: super::pe::PE) -> Result<APISet, Box<dyn std::error::Error>> {
+    log::trace!("Parsing apisetschema mapping");
+
     let mut apiset: APISet = APISet::new();
 
     let apiset_section = apiset_dll
@@ -185,12 +187,18 @@ fn parse_apiset(apiset_dll: super::pe::PE) -> Result<APISet, Box<dyn std::error:
         cursor.set_position(cursor_position + std::mem::size_of::<APISetNamespaceEntry>() as u64);
     }
 
+    log::trace!("Parsed apisetschema mapping");
+
     return Ok(apiset);
 }
 
 pub fn load_apisetschema_mapping() -> Result<APISet, Box<dyn std::error::Error>> {
+    log::trace!("Loading apisetschema mapping");
+
     let p = PathBuf::from_str(API_SET_SCHEMA_DLL_PATH)?;
     let pe = super::pe::parse_pe(&p)?;
+
+    log::trace!("Parsed apisetschema dll");
 
     return parse_apiset(pe);
 }
@@ -199,9 +207,12 @@ pub fn is_dll_from_apiset_schema(name: &str) -> bool {
     return name.starts_with("api-ms-win") || name.starts_with("ext-ms-win");
 }
 
-pub fn find_dll(name: &str, apiset_schema: &APISet) -> String {
-    return apiset_schema
-        .map(name)
-        .unwrap_or_else(|| "<unknown>".to_string())
-        .to_string();
+pub fn find_dll(name: &str, apiset_schema: &APISet) -> Option<String> {
+    let res = apiset_schema.map(name);
+
+    if res.is_none() {
+        log::trace!("Could not resolve API Set DLL: {name}");
+    }
+
+    return res;
 }

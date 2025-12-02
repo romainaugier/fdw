@@ -70,8 +70,6 @@ fn get_dll_dependencies(
 
     log::trace!("get_dll_dependencies(): Looking for dll dependencies: {pe_name}");
 
-    log::debug!("Resolving dependencies for: {}", pe_path.display());
-
     let mut dependencies_array: Vec<json::JsonValue> = Vec::new();
 
     for dll_name in &pe.dll_names {
@@ -79,7 +77,7 @@ fn get_dll_dependencies(
 
         let resolved_path = match super::apiset::is_dll_from_apiset_schema(&lower) {
             true => find_dll(
-                &super::apiset::find_dll(&lower, apiset_schema),
+                &super::apiset::find_dll(&lower, apiset_schema).unwrap_or("<unknown>".to_string()),
                 search_paths,
             )
             .unwrap_or("<unknown>".to_string()),
@@ -132,33 +130,41 @@ fn get_dll_dependencies_recursive(
     for dll_name in &pe.dll_names {
         let lower = dll_name.to_ascii_lowercase();
 
-        let resolved_path = match super::apiset::is_dll_from_apiset_schema(&lower) {
-            true => find_dll(
-                &super::apiset::find_dll(&lower, apiset_schema),
-                search_paths,
-            )
-            .unwrap_or("<unknown>".to_string()),
-            false => find_dll(&lower, search_paths).unwrap_or("<unknown>".to_string()),
+        let actual_dll_name = if super::apiset::is_dll_from_apiset_schema(&lower) {
+            match super::apiset::find_dll(&lower, apiset_schema) {
+                Some(name) => name,
+                None => lower.clone(),
+            }
+        } else {
+            lower.clone()
         };
 
-        let resolved_pathbuf = PathBuf::from(&resolved_path);
+        match find_dll(&actual_dll_name, search_paths) {
+            Ok(resolved_path) => {
+                let resolved_pathbuf = PathBuf::from(&resolved_path);
 
-        let dep_object = match get_dll_dependencies_recursive(
-            &resolved_pathbuf,
-            search_paths,
-            apiset_schema,
-            cache,
-            visited,
-        ) {
-            Ok(deps) => deps,
-            Err(e) => json::object! {
+                let dep_object = match get_dll_dependencies_recursive(
+                    &resolved_pathbuf,
+                    search_paths,
+                    apiset_schema,
+                    cache,
+                    visited,
+                ) {
+                    Ok(deps) => deps,
+                    Err(e) => json::object! {
+                        name: lower.clone(),
+                        path: resolved_path,
+                        dependencies: format!("Failed to resolve dependencies: {e}")
+                    },
+                };
+
+                dependencies.push(dep_object);
+            }
+            Err(_) => dependencies.push(json::object! {
                 name: lower.clone(),
-                path: resolved_path,
-                dependencies: format!("Failed to resolve dependencies: {e}")
-            },
-        };
-
-        dependencies.push(dep_object);
+                path: "<unknown>",
+            }),
+        }
     }
 
     visited.remove(pe_path);

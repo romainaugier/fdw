@@ -108,10 +108,6 @@ impl CLIParser {
             return Ok(());
         }
 
-        /*
-         * TODO: add short_name in parsing
-         */
-
         for arg in args.skip(1).into_iter() {
             let first_eq = arg.find("=").unwrap_or(usize::max_value());
 
