@@ -113,14 +113,15 @@ impl APISet {
         return APISet::default();
     }
 
-    pub fn map(&self, dll_name: &String) -> Option<&String> {
+    pub fn map(&self, dll_name: &str) -> Option<String> {
         if dll_name.ends_with(".dll") {
             return self
                 .mapping
-                .get(dll_name.split_at_checked(dll_name.len() - 4).unwrap().0);
+                .get(dll_name.split_at_checked(dll_name.len() - 4).unwrap().0)
+                .cloned();
         }
 
-        return self.mapping.get(dll_name);
+        return self.mapping.get(dll_name).cloned();
     }
 }
 
@@ -196,4 +197,11 @@ pub fn load_apisetschema_mapping() -> Result<APISet, Box<dyn std::error::Error>>
 
 pub fn is_dll_from_apiset_schema(name: &str) -> bool {
     return name.starts_with("api-ms-win") || name.starts_with("ext-ms-win");
+}
+
+pub fn find_dll(name: &str, apiset_schema: &APISet) -> String {
+    return apiset_schema
+        .map(name)
+        .unwrap_or_else(|| "<unknown>".to_string())
+        .to_string();
 }

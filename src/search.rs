@@ -4,57 +4,71 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 fn find_dll(name: &str, search_paths: &[PathBuf]) -> Result<String, Box<dyn std::error::Error>> {
+    log::trace!("find_dll(): Looking for dll: {name}");
+
     for path in search_paths.iter() {
-        let entries =
-            std::fs::read_dir(path).expect("Cannot read directory content in search path");
+        let entries = match std::fs::read_dir(path) {
+            Ok(e) => e,
+            Err(err) => {
+                log::trace!(
+                    "Cannot read entries of directory: {} ({})",
+                    path.display(),
+                    err
+                );
+                continue;
+            }
+        };
 
         for entry in entries {
-            let file = entry.expect("Cannot read directory entry");
+            let file = match entry {
+                Ok(f) => f,
+                Err(err) => {
+                    log::trace!(
+                        "Cannot read entry in directory: {} ({})",
+                        path.display(),
+                        err
+                    );
+                    continue;
+                }
+            };
 
             if !file.file_type().unwrap().is_file() {
                 continue;
             }
 
-            if file.file_name().to_str().unwrap().ends_with(name) {
-                let dll_path: String = file.path().to_str().unwrap().to_string();
-
-                return Ok(dll_path);
+            if file
+                .file_name()
+                .to_str()
+                .unwrap_or("<invalid utf-8>")
+                .ends_with(name)
+            {
+                return Ok(file
+                    .path()
+                    .to_str()
+                    .unwrap_or("<invalid utf-8>")
+                    .to_string());
             }
         }
     }
 
-    return Err("Cannot find dll in filesystem".into());
+    return Err("Cannot find dll file in provided search paths".into());
 }
 
-fn resolve_dependencies_recursive(
+fn get_dll_dependencies(
     pe_path: &PathBuf,
     search_paths: &[PathBuf],
     apiset_schema: &super::apiset::APISet,
-    cache: &mut HashMap<PathBuf, json::JsonValue>,
-    visited: &mut HashSet<PathBuf>,
 ) -> Result<json::JsonValue, Box<dyn std::error::Error>> {
-    let pe_path = pe_path.canonicalize()?;
-
-    if let Some(cached) = cache.get(&pe_path) {
-        return Ok(cached.clone());
-    }
-
-    if !visited.insert(pe_path.clone()) {
-        return Ok(json::object! {
-            name: pe_path.file_name().and_then(|n| n.to_str()).unwrap_or("<unknown>"),
-            path: pe_path.to_str().unwrap_or("<invalid utf-8>"),
-            error: "circular dependency detected"
-        });
-    }
-
     let pe = super::pe::parse_pe(&pe_path)
-        .map_err(|e| format!("Failed to parse PE {}: {}", pe_path.display(), e))?;
+        .map_err(|err| format!("Failed to parse PE \"{}\" ({})", pe_path.display(), err))?;
 
-    let name = pe_path
+    let pe_name = pe_path
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("<unknown>")
         .to_ascii_lowercase();
+
+    log::trace!("get_dll_dependencies(): Looking for dll dependencies: {pe_name}");
 
     log::debug!("Resolving dependencies for: {}", pe_path.display());
 
@@ -63,66 +77,96 @@ fn resolve_dependencies_recursive(
     for dll_name in &pe.dll_names {
         let lower = dll_name.to_ascii_lowercase();
 
-        if super::apiset::is_dll_from_apiset_schema(&lower) {
-            let resolved_dll = match apiset_schema.map(&lower) {
-                Some(dll) => dll,
-                None => continue,
-            };
+        let resolved_path = match super::apiset::is_dll_from_apiset_schema(&lower) {
+            true => find_dll(
+                &super::apiset::find_dll(&lower, apiset_schema),
+                search_paths,
+            )
+            .unwrap_or("<unknown>".to_string()),
+            false => find_dll(&lower, search_paths).unwrap_or("<unknown>".to_string()),
+        };
 
-            let dep_object = match find_dll(resolved_dll, search_paths).ok() {
-                Some(resolved_path) => json::object! {
-                    name: lower.clone(),
-                    path: resolved_path,
-                },
-
-                None => json::object! {
-                    name: lower.clone(),
-                    path: json::Null,
-                    error: "not found in search paths"
-                },
-            };
-
-            dependencies_array.push(dep_object);
-        } else {
-            let dep_object = match find_dll(&lower, search_paths).ok() {
-                Some(dll_path) => {
-                    let dll_path_buf = PathBuf::from(&dll_path);
-
-                    match resolve_dependencies_recursive(
-                        &dll_path_buf,
-                        search_paths,
-                        apiset_schema,
-                        cache,
-                        visited,
-                    ) {
-                        Ok(dep_tree) => dep_tree,
-                        Err(e) => json::object! {
-                            name: dll_name.clone(),
-                            path: dll_path,
-                            error: format!("failed to resolve dependencies: {e}")
-                        },
-                    }
-                }
-                None => {
-                    log::warn!("Could not find DLL on disk: {}", lower);
-                    json::object! {
-                        name: lower.clone(),
-                        path: json::Null,
-                        error: "not found in search paths"
-                    }
-                }
-            };
-
-            dependencies_array.push(dep_object);
-        }
+        dependencies_array.push(json::object! {
+            name: lower,
+            path: resolved_path
+        });
     }
 
-    visited.remove(&pe_path);
-
     let result = json::object! {
-        name: name,
+        name: pe_name,
         path: pe_path.to_str().unwrap_or("<invalid utf-8>"),
         dependencies: json::JsonValue::Array(dependencies_array)
+    };
+
+    return Ok(result);
+}
+
+fn get_dll_dependencies_recursive(
+    pe_path: &PathBuf,
+    search_paths: &[PathBuf],
+    apiset_schema: &super::apiset::APISet,
+    cache: &mut HashMap<PathBuf, json::JsonValue>,
+    visited: &mut HashSet<PathBuf>,
+) -> Result<json::JsonValue, Box<dyn std::error::Error>> {
+    if let Some(cached) = cache.get(pe_path) {
+        return Ok(cached.clone());
+    }
+
+    if !visited.insert(pe_path.clone()) {
+        return Err(format!("Circular dependency detected in dll: {}", pe_path.display()).into());
+    }
+
+    let pe = super::pe::parse_pe(&pe_path)
+        .map_err(|err| format!("Failed to parse PE \"{}\" ({})", pe_path.display(), err))?;
+
+    let pe_name = pe_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("<unknown>")
+        .to_ascii_lowercase();
+
+    log::trace!("get_dll_dependencies_recursive(): Looking for dll dependencies: {pe_name}");
+
+    let mut dependencies: Vec<json::JsonValue> = Vec::new();
+
+    for dll_name in &pe.dll_names {
+        let lower = dll_name.to_ascii_lowercase();
+
+        let resolved_path = match super::apiset::is_dll_from_apiset_schema(&lower) {
+            true => find_dll(
+                &super::apiset::find_dll(&lower, apiset_schema),
+                search_paths,
+            )
+            .unwrap_or("<unknown>".to_string()),
+            false => find_dll(&lower, search_paths).unwrap_or("<unknown>".to_string()),
+        };
+
+        let resolved_pathbuf = PathBuf::from(&resolved_path);
+
+        let dep_object = match get_dll_dependencies_recursive(
+            &resolved_pathbuf,
+            search_paths,
+            apiset_schema,
+            cache,
+            visited,
+        ) {
+            Ok(deps) => deps,
+            Err(e) => json::object! {
+                name: lower.clone(),
+                path: resolved_path,
+                dependencies: format!("Failed to resolve dependencies: {e}")
+            },
+        };
+
+        dependencies.push(dep_object);
+    }
+
+    visited.remove(pe_path);
+
+    let result = json::object! {
+        name: pe_name,
+        path: pe_path.to_str().unwrap_or("<invalid path>"),
+        dependencies: json::JsonValue::Array(dependencies),
     };
 
     cache.insert(pe_path.clone(), result.clone());
@@ -136,11 +180,11 @@ pub fn resolve_dependencies(
     apiset_schema: super::apiset::APISet,
     recurse: bool,
 ) -> Result<json::JsonValue, Box<dyn std::error::Error>> {
-    let mut cache = HashMap::new();
-    let mut visited = HashSet::new();
-
     if recurse {
-        return resolve_dependencies_recursive(
+        let mut cache: HashMap<PathBuf, json::JsonValue> = HashMap::new();
+        let mut visited: HashSet<PathBuf> = HashSet::new();
+
+        return get_dll_dependencies_recursive(
             &pe_path,
             &search_paths,
             &apiset_schema,
@@ -148,12 +192,6 @@ pub fn resolve_dependencies(
             &mut visited,
         );
     } else {
-        return resolve_dependencies_recursive(
-            &pe_path,
-            &search_paths,
-            &apiset_schema,
-            &mut cache,
-            &mut visited,
-        );
+        return get_dll_dependencies(&pe_path, &search_paths, &apiset_schema);
     }
 }
