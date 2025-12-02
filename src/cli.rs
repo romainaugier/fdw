@@ -82,6 +82,8 @@ impl CLIParser {
         arg_type: CLIArgType,
         arg_action: CLIArgAction,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let arg_name = arg_name.trim_matches('-');
+
         if self.args.contains_key(arg_name) {
             return Err("CLIParser already contains argument".into());
         }
@@ -92,7 +94,8 @@ impl CLIParser {
         );
 
         if arg_short_name.is_some() {
-            self.short_names.insert(arg_short_name.unwrap(), arg_name);
+            self.short_names
+                .insert(arg_short_name.unwrap().trim_matches('-'), arg_name);
         }
 
         return Ok(());
@@ -117,8 +120,12 @@ impl CLIParser {
                     .split_once("=")
                     .expect("Can't find any '=' in the argument but should");
 
-                let arg_name = arg_split.0.trim_matches('-');
+                let mut arg_name = arg_split.0.trim_matches('-');
                 let arg_value = arg_split.1;
+
+                if let Some(real_name) = self.short_names.get(arg_name) {
+                    arg_name = real_name;
+                }
 
                 let arg = self
                     .args
@@ -127,9 +134,15 @@ impl CLIParser {
 
                 arg.arg_value = arg_value.to_string();
             } else {
+                let mut arg_name = arg.as_str().trim_matches('-');
+
+                if let Some(real_name) = self.short_names.get(arg_name) {
+                    arg_name = real_name;
+                }
+
                 let arg = self
                     .args
-                    .get_mut(arg.as_str().trim_matches('-'))
+                    .get_mut(arg_name)
                     .expect("Undeclared argument parsed in command-line arguments");
 
                 match arg.arg_action {

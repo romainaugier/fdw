@@ -20,25 +20,26 @@ fn i64_to_level_filter(value: i64) -> log::LevelFilter {
 
 fn main() {
     let mut arg_parser = cli::CLIParser::new();
+
     arg_parser
         .add_argument(
-            "loglevel",
-            Some("v"),
+            "--loglevel",
+            Some("-v"),
             cli::CLIArgType::Int,
             cli::CLIArgAction::Store,
         )
         .expect("Error while adding argument to CLIParser");
     arg_parser
         .add_argument(
-            "file",
-            Some("f"),
+            "--file",
+            Some("-f"),
             cli::CLIArgType::String,
             cli::CLIArgAction::Store,
         )
         .expect("Error while adding argument to CLIParser");
     arg_parser
         .add_argument(
-            "search-paths",
+            "--search-paths",
             None,
             cli::CLIArgType::String,
             cli::CLIArgAction::Store,
@@ -46,7 +47,7 @@ fn main() {
         .expect("Error while adding argument to CLIParser");
     arg_parser
         .add_argument(
-            "recurse",
+            "--recurse",
             Some("-r"),
             cli::CLIArgType::Bool,
             cli::CLIArgAction::StoreTrue,
