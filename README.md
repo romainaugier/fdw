@@ -4,7 +4,7 @@ File Dependencies Walker for Windows's PE and DLL files.
 
 Usage:
 ```bash
-fdw --file=<file> --search-paths=<path>
+fdw --file=<file> --search-paths=<path> --recurse --loglevel=<0..5>
 ```
 
 Everything is written from scratch, for both educational purposes (the goal of this project was to get familiar with Rust and learn more about PE/DLL) and control over dependencies (I don't like to rely on a lot of dependencies, we never know).
